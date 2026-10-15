@@ -2,40 +2,45 @@ import streamlit as st
 
 # Page configuration for mobile browsers
 st.set_page_config(
-    page_title="BBIT Study Hub",
-    page_icon="📚",
+    page_title="BBIT Academic Command Center",
+    page_icon="🎓",
     layout="centered"
 )
 
-# Academic Hierarchy for your BBIT Semester 1
+# Complete VU BBIT Semester 1 Academic Hierarchy
 if "hierarchy" not in st.session_state:
     st.session_state.hierarchy = {
         "BBIT": {
             "Semester 1": {
                 "CS101 - Introduction to Computing": [
-                    "Lecture_01_Overview.pdf", 
-                    "Lecture_02_Hardware_Basics.pdf", 
-                    "CS101_Midterm_Past_Papers.pdf"
+                    {"name": "Lecture_01_Introduction_to_Computing.pdf", "status": "Pending"},
+                    {"name": "Lecture_02_History_and_Data_Storage.pdf", "status": "Pending"},
+                    {"name": "Lecture_03_Operating_Systems_Basics.pdf", "status": "Pending"},
+                    {"name": "CS101_Midterm_Past_Papers.pdf", "status": "Pending"}
                 ],
                 "ENG101 - English Comprehension": [
-                    "Lecture_01_Grammar_Rules.pdf", 
-                    "Paragraph_Writing_Guide.docx"
+                    {"name": "Lecture_01_Reading_and_Dictionary.pdf", "status": "Pending"},
+                    {"name": "Lecture_02_Main_Ideas_and_Topic_Sentences.pdf", "status": "Pending"},
+                    {"name": "Paragraph_Writing_Guide.docx", "status": "Pending"}
                 ],
                 "MGT211 - Introduction to Business": [
-                    "Business_Forms_Overview.pdf"
+                    {"name": "Lecture_01_History_and_Introduction_of_Business.pdf", "status": "Pending"},
+                    {"name": "Lecture_02_Forms_of_Business_Ownership.pdf", "status": "Pending"},
+                    {"name": "Operations_Management_Notes.pdf", "status": "Pending"}
                 ],
                 "MGT503 - Principles of Management": [
-                    "Management_Foundations.pdf"
+                    {"name": "Lecture_01_Management_Foundations.pdf", "status": "Pending"},
+                    {"name": "Lecture_02_Planning_and_Decision_Making.pdf", "status": "Pending"}
                 ],
                 "ISL202 - Islamic Studies": [
-                    "Islamic_Jurisprudence_Notes.pdf"
+                    {"name": "Islamic_Jurisprudence_and_Core_Values.pdf", "status": "Pending"}
                 ]
             }
         }
     }
 
-st.title("🎓 VU BBIT Intelligent Study Hub")
-st.markdown("Your mobile-friendly cloud academic command center.")
+st.title("🎓 VU BBIT Academic Command Center")
+st.markdown("Your mobile-friendly cloud curriculum tracker.")
 
 # Cascading Dropdowns
 programs = list(st.session_state.hierarchy.keys())
@@ -51,12 +56,26 @@ if selected_program:
         
         if selected_course:
             st.divider()
-            st.subheader(f"📂 Course Files: {selected_course}")
+            st.subheader(f"📂 Course Materials: {selected_course}")
             files = st.session_state.hierarchy[selected_program][selected_semester][selected_course]
             
-            for f in files:
-                st.text(f"📄 {f}")
+            # Display file checklist
+            for i, f in enumerate(files):
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.text(f"📄 {f['name']}")
+                with col2:
+                    completed = st.checkbox("Done", key=f"{selected_course}_{i}")
+                    if completed:
+                        f['status'] = "Completed"
+                    else:
+                        f['status'] = "Pending"
             
             st.divider()
-            st.subheader("⚡ Auto-Generated Target")
-            st.info(f"Today's Target: Read `{files[0]}` and review core summaries for {selected_course}.")
+            st.subheader("⚡ Auto-Generated Daily Target")
+            # Find the first pending file as the active target
+            pending_files = [f['name'] for f in files if f['status'] == "Pending"]
+            if pending_files:
+                st.info(f"**Today's Focus:** Study `{pending_files[0]}` and summarize key concepts for {selected_course.split('-')[0].strip()}.")
+            else:
+                st.success(f"🎉 All materials for {selected_course} are completed!")
