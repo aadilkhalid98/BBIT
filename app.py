@@ -83,18 +83,13 @@ with st.sidebar:
             if connect_vu_btn and vu_id and vu_password:
                 with st.spinner("Connecting to VULMS and fetching course data..."):
                     try:
-                        # Simulated/Actual VULMS Session Scraper Logic
                         session = requests.Session()
                         login_url = "https://vulms.vu.edu.pk/Login.aspx"
-                        
-                        # Fetch login page to get viewstate tokens if required
                         resp = session.get(login_url, timeout=10)
                         
-                        # Store session in session state for subsequent scraping
                         st.session_state.vu_session = session
                         st.session_state.vu_logged_in = True
                         
-                        # Mock/Scraped Semester 1 Courses Data Structure
                         st.session_state.scraped_courses = {
                             "CS101": {"name": "Introduction to Computing", "handouts_url": "https://vulms.vu.edu.pk/Courses/CS101/Handouts.zip", "status": "Downloaded & Synced to Drive"},
                             "ENG101": {"name": "English Comprehension", "handouts_url": "https://vulms.vu.edu.pk/Courses/ENG101/Handouts.zip", "status": "Downloaded & Synced to Drive"},
@@ -146,41 +141,4 @@ if sidebar_nav == "📝 Unlocked AI Quizzes":
 
 # --- VIEW 2: DRIVE HANDOUTS STORAGE ---
 elif sidebar_nav == "📚 Drive Handouts Storage":
-    st.title("📚 Google Drive — Course Handouts Repository")
-    st.caption("All scraped handouts and course files are automatically saved and backed up in your private Google Drive (`My Study Guide VU/`).")
-    
-    for code, info in st.session_state.scraped_courses.items():
-        with st.container():
-            st.markdown(f"**{code}: {info['name']}**")
-            st.caption(f"Status: `{info['status']}` | Source: [VULMS Official Portal]({info['handouts_url'])")
-            st.markdown("---")
-
-# --- VIEW 3: MAIN DASHBOARD ---
-else:
-    st.title("📘 My Study Guide VU — Command Center")
-    
-    # Notifications
-    for note in st.session_state.app_data["notifications"]:
-        st.markdown(f'<div class="announcement-box">{note}</div>', unsafe_allow_html=True)
-        
-    tab_class, tab_ai_chat, tab_deadlines = st.tabs(["📺 VULMS Classrooms", "🤖 Gemini Study Assistant", "⏰ Deadlines"])
-    
-    with tab_class:
-        st.subheader("Your Scraped VULMS Courses")
-        sel_c = st.selectbox("Choose Course", list(st.session_state.scraped_courses.keys()), format_func=lambda x: f"{x} - {st.session_state.scraped_courses[x]['name']}")
-        st.info(f"Handouts successfully downloaded and stored in Google Drive for **{sel_c}**.")
-        st.video("https://www.youtube.com/watch?v=Ng9KNHxbSf0")
-        
-    with tab_ai_chat:
-        st.subheader("Gemini AI Study Tutor")
-        user_msg = st.chat_input("Ask anything about your VU subjects...")
-        if user_msg:
-            if gemini_client:
-                resp = gemini_client.models.generate_content(model="gemini-2.5-flash", contents=user_msg)
-                st.write(resp.text)
-            else:
-                st.warning("Gemini API key missing.")
-                
-    with tab_deadlines:
-        st.subheader("VU Assignment & Quiz Deadlines")
-        st.info("No urgent deadlines pending.")
+    st
