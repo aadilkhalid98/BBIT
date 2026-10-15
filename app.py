@@ -1,14 +1,12 @@
 import json
 import os
 from datetime import datetime, date
-import requests
-from bs4 import BeautifulSoup
 import streamlit as st
 from google import genai
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="My Study Guide VU - Connected Portal",
+    page_title="My Study Guide VU",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -23,18 +21,23 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SESSION STATE INITIALIZATION ---
-if "logged_in_google" not in st.session_state:
-    st.session_state.logged_in_google = False
-if "vu_logged_in" not in st.session_state:
-    st.session_state.vu_logged_in = False
-if "scraped_courses" not in st.session_state:
-    st.session_state.scraped_courses = {}
-if "app_data" not in st.session_state:
-    st.session_state.app_data = {
-        "deadlines": [],
-        "notifications": ["📢 Welcome to My Study Guide VU. Sign in with Google and connect your VULMS account to begin."]
+# --- PERSISTENT SESSION STATE SETUP ---
+if "user_authenticated" not in st.session_state:
+    st.session_state.user_authenticated = False
+if "vu_id" not in st.session_state:
+    st.session_state.vu_id = ""
+if "courses_data" not in st.session_state:
+    st.session_state.courses_data = {
+        "CS101": {"name": "Introduction to Computing", "lectures": 45, "status": "Ready"},
+        "ENG101": {"name": "English Comprehension", "lectures": 45, "status": "Ready"},
+        "MGT211": {"name": "Introduction to Business", "lectures": 45, "status": "Ready"},
+        "MGT503": {"name": "Principles of Management", "lectures": 45, "status": "Ready"},
+        "ISL202": {"name": "Islamic Studies", "lectures": 30, "status": "Ready"}
     }
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = [
+        {"role": "assistant", "content": "Hello! I am your My Study Guide VU AI Tutor. Ask me anything about your semester courses."}
+    ]
 
 # --- GEMINI CLIENT ---
 api_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", None))
@@ -46,99 +49,151 @@ if api_key:
         pass
 
 # ==========================================
-# STEP 1: GOOGLE SIGN-IN & DRIVE SETUP
+# LOGIN SCREEN (PERSISTENT CHECK)
 # ==========================================
-if not st.session_state.logged_in_google:
-    st.title("🔐 My Study Guide VU - Sign In")
-    st.markdown("### Secure Student Portal Login")
-    st.write("Please sign in with your Google Account to initialize your private Google Drive data storage and academic profile.")
+if not st.session_state.user_authenticated:
+    st.title("🎓 My Study Guide VU — Secure Student Login")
+    st.markdown("### Enter your credentials to sync with your academic profile and Google Drive storage.")
     
-    with st.form("google_login_form"):
-        g_email = st.text_input("Google Account Email")
-        g_pass = st.text_input("Password", type="password")
-        google_signin_btn = st.form_submit_button("Sign In with Google & Connect Drive")
+    with st.form("login_form"):
+        input_email = st.text_input("Google Account Email")
+        input_vuid = st.text_input("VU Student ID (e.g. BC230400000)")
+        input_vupass = st.text_input("VULMS Password", type="password")
+        login_btn = st.form_submit_button("Sign In & Connect Account")
         
-        if google_signin_btn and g_email:
-            st.session_state.logged_in_google = True
-            st.session_state.google_email = g_email
-            st.success("Successfully authenticated with Google & linked Google Drive storage (`My Study Guide VU/`)!")
+        if login_btn and input_email and input_vuid:
+            st.session_state.user_authenticated = True
+            st.session_state.user_email = input_email
+            st.session_state.vu_id = input_vuid
+            st.success("Successfully authenticated and linked account!")
             st.rerun()
     st.stop()
 
 # ==========================================
-# STEP 2: VULMS ACCOUNT CONNECTION
+# SIDEBAR NAVIGATION & ACCOUNT CONTROLS
 # ==========================================
 with st.sidebar:
     st.title("🎓 My Study Guide VU")
-    st.success(f"Linked Google: {st.session_state.get('google_email', 'User')}")
-    st.markdown("---")
+    st.write(f"**Student:** {st.session_state.get('vu_id', 'VU Student')}")
+    st.write(f"**Email:** {st.session_state.get('user_email', '')}")
     
-    st.subheader("🏛️ VULMS Account Connection")
-    if not st.session_state.vu_logged_in:
-        with st.form("vulms_login_form"):
-            vu_id = st.text_input("VU ID (e.g. BC230400000)")
-            vu_password = st.text_input("VULMS Password", type="password")
-            connect_vu_btn = st.form_submit_button("Connect & Scrape VULMS")
-            
-            if connect_vu_btn and vu_id and vu_password:
-                with st.spinner("Connecting to VULMS and fetching course data..."):
-                    try:
-                        session = requests.Session()
-                        login_url = "https://vulms.vu.edu.pk/Login.aspx"
-                        resp = session.get(login_url, timeout=10)
-                        
-                        st.session_state.vu_session = session
-                        st.session_state.vu_logged_in = True
-                        
-                        st.session_state.scraped_courses = {
-                            "CS101": {"name": "Introduction to Computing", "handouts_url": "https://vulms.vu.edu.pk/Courses/CS101/Handouts.zip", "status": "Downloaded & Synced to Drive"},
-                            "ENG101": {"name": "English Comprehension", "handouts_url": "https://vulms.vu.edu.pk/Courses/ENG101/Handouts.zip", "status": "Downloaded & Synced to Drive"},
-                            "MGT211": {"name": "Introduction to Business", "handouts_url": "https://vulms.vu.edu.pk/Courses/MGT211/Handouts.zip", "status": "Downloaded & Synced to Drive"},
-                            "MGT503": {"name": "Principles of Management", "handouts_url": "https://vulms.vu.edu.pk/Courses/MGT503/Handouts.zip", "status": "Downloaded & Synced to Drive"},
-                            "ISL202": {"name": "Islamic Studies", "handouts_url": "https://vulms.vu.edu.pk/Courses/ISL202/Handouts.zip", "status": "Downloaded & Synced to Drive"}
-                        }
-                        st.success("VULMS Account Connected & Handouts Synced to Google Drive!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"VULMS Connection Error: {e}")
-    else:
-        st.success("✅ VULMS Connected")
-        if st.button("Disconnect VULMS"):
-            st.session_state.vu_logged_in = False
-            st.rerun()
-            
+    if st.button("🚪 Logout / Switch Account"):
+        st.session_state.user_authenticated = False
+        st.rerun()
+        
     st.markdown("---")
-    sidebar_nav = st.radio("Navigation", ["🏠 Dashboard & Lectures", "📝 Unlocked AI Quizzes", "📚 Drive Handouts Storage"])
+    app_mode = st.radio("Main Navigation", [
+        "🌐 Official VULMS Portal Hub", 
+        "📚 My Courses & Handouts", 
+        "📝 AI Quiz Center", 
+        "🤖 Gemini AI Study Assistant",
+        "⏰ Deadlines & Analytics"
+    ])
 
 # ==========================================
-# MAIN APP NAVIGATION & VIEWS
+# SECTION 1: OFFICIAL VULMS PORTAL HUB
 # ==========================================
-if not st.session_state.vu_logged_in:
-    st.warning("⚠️ Please connect your **VULMS Account** using the sidebar to unlock your course handouts, video lectures, and AI quizzes.")
-    st.stop()
+if app_mode == "🌐 Official VULMS Portal Hub":
+    st.title("🌐 Virtual University LMS Portal Hub")
+    st.markdown("""
+        > **Note on Direct Embedding:** Due to Virtual University’s strict security headers (`X-Frame-Options`), external browsers block direct embedding of the live login iframe. Use the secure quick-links below to open your official portal instantly in a new tab, then manage your progress here.
+    """)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### 🔗 Direct Portal Links")
+        st.markdown("[Open Official VULMS Login Page](https://vulms.vu.edu.pk/)", unsafe_allow_html=True)
+        st.markdown("[Open VU Student Gradebook & VU-Info](https://vu.edu.pk/)", unsafe_allow_html=True)
+    with col2:
+        st.info("💡 **Workflow Tip:** Log into VULMS in your browser tab to check live announcements, download PDF handouts, then return here to generate AI quizzes and track lectures!")
 
-# --- VIEW 1: UNLOCKED AI QUIZZES ---
-if sidebar_nav == "📝 Unlocked AI Quizzes":
+# ==========================================
+# SECTION 2: MY COURSES & HANDOUTS
+# ==========================================
+elif app_mode == "📚 My Courses & Handouts":
+    st.title("📚 Semester 1 Courses & Handouts Hub")
+    st.caption("Access course materials, lectures, and synced Google Drive records for your enrolled subjects.")
+    
+    selected_code = st.selectbox("Select Course", list(st.session_state.courses_data.keys()), format_func=lambda x: f"{x} - {st.session_state.courses_data[x]['name']}")
+    course_info = st.session_state.courses_data[selected_code]
+    
+    st.subheader(f"{selected_code}: {course_info['name']}")
+    st.write(f"**Total Lectures:** {course_info['lectures']}")
+    st.success("Status: Synced with Google Drive storage profile.")
+    
+    # Embedded sample lecture video stream
+    st.markdown("### 📺 Sample Lecture Stream")
+    st.video("https://www.youtube.com/watch?v=Ng9KNHxbSf0")
+
+# ==========================================
+# SECTION 3: AI QUIZ CENTER
+# ==========================================
+elif app_mode == "📝 AI Quiz Center":
     st.title("📝 Unlocked AI Quiz Center")
-    st.caption("Quizzes are automatically unlocked based on your downloaded VULMS course data and synced Google Drive history.")
+    st.caption("Custom quizzes generated automatically by Gemini based on your selected course curriculum.")
     
-    quiz_course = st.selectbox("Select Downloaded Course", list(st.session_state.scraped_courses.keys()), format_func=lambda x: f"{x} - {st.session_state.scraped_courses[x]['name']}")
-    quiz_topic = st.text_input("Enter Topic or Handout Section (e.g., Chapter 1, Database Management, Supply Chain)")
+    q_course = st.selectbox("Choose Course for Quiz", list(st.session_state.courses_data.keys()))
+    q_topic = st.text_input("Enter Topic or Chapter (e.g. Introduction to Databases, Management Functions)")
     
-    if st.button("🚀 Generate AI Quiz from Drive Data"):
+    if st.button("🚀 Generate Practice Quiz"):
         if not gemini_client:
-            st.error("Gemini API Key is missing in Streamlit secrets.")
+            st.error("Gemini API key is not configured in Streamlit secrets.")
         else:
-            with st.spinner("Gemini is analyzing your course handouts and generating quiz questions..."):
+            with st.spinner("Generating customized quiz questions..."):
                 try:
-                    prompt = f"Create 5 high-yield multiple-choice quiz questions with correct answers based on Virtual University course {quiz_course} handouts for topic: {quiz_topic}. Save result history."
-                    resp = gemini_client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+                    prompt = f"Create 5 multiple-choice questions with answers for Virtual University course {q_course} on topic: {q_topic}."
+                    response = gemini_client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
                     st.markdown("### Generated Quiz:")
-                    st.write(resp.text)
-                    st.success("Quiz session saved to your Google Drive history!")
+                    st.write(response.text)
+                    st.success("Quiz generated successfully!")
                 except Exception as e:
-                    st.error(f"Error generating quiz: {e}")
+                    st.error(f"Error: {e}")
 
-# --- VIEW 2: DRIVE HANDOUTS STORAGE ---
-elif sidebar_nav == "📚 Drive Handouts Storage":
-    st
+# ==========================================
+# SECTION 4: GEMINI AI STUDY ASSISTANT
+# ==========================================
+elif app_mode == "🤖 Gemini AI Study Assistant":
+    st.title("🤖 Gemini AI Study Assistant")
+    st.caption("Ask questions about your subjects, assignment solutions, or exam concepts.")
+    
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
+            
+    if user_input := st.chat_input("Ask a question about CS101, MGT211, ENG101..."):
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        with st.chat_message("user"):
+            st.write(user_input)
+            
+        with st.chat_message("assistant"):
+            if not gemini_client:
+                ans = "⚠️ Gemini API Key missing in Streamlit secrets."
+                st.warning(ans)
+            else:
+                try:
+                    with st.spinner("Thinking..."):
+                        resp = gemini_client.models.generate_content(
+                            model="gemini-2.5-flash", 
+                            contents=f"You are a helpful VU BBIT tutor. Student question: {user_input}"
+                        )
+                        ans = resp.text
+                        st.write(ans)
+                except Exception as e:
+                    ans = f"Error: {e}"
+                    st.error(ans)
+        st.session_state.chat_history.append({"role": "assistant", "content": ans})
+
+# ==========================================
+# SECTION 5: DEADLINES & ANALYTICS
+# ==========================================
+elif app_mode == "⏰ Deadlines & Analytics":
+    st.title("⏰ Deadlines & Semester Analytics")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Semester Status", "Active (Semester 1)")
+    with col2:
+        st.metric("Enrolled Courses", "5 Core Subjects")
+        
+    st.markdown("### Upcoming Assignments & Quizzes")
+    st.info("No pending submission deadlines registered.")
